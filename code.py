@@ -6,7 +6,8 @@ import sys
 import numpy as np
 import pandas as pd
 
-files = ['a_example.txt','b_read_on.txt','c_incunabula.txt','d_tought_choices.txt','e_so_many_books.txt','f_libraries_of_the_world.txt']
+
+files = ['a_example.txt','b_read_on.txt','c_incunabula.txt','d_tough_choices.txt','e_so_many_books.txt','f_libraries_of_the_world.txt']
 for file_name in files:
     input_file = file_name
     with open(input_file, 'r') as my_file:
@@ -14,14 +15,13 @@ for file_name in files:
         B, L, D = (int(x) for x in content[0].split(' '))
         scores = content[1].split(' ')
 
-        d = {"ID_book" : [],
-            "score" : []}
+        d = {}
         i = 0
         for s in scores:
-            d["ID_book"].append(i)
+            d[i] = s
             i+= 1
-            d["score"].append(s)
-        books_dataframe = pd.DataFrame(data= d)
+
+        books_dataframe = pd.DataFrame()
 
         libraries = {}
         books = {}
@@ -45,6 +45,7 @@ for file_name in files:
             "books_per_day" : [],
             "ID_book" : [],
             "score" : [],
+            'book_done' : []
         }
 
         for i in np.arange(2, len(content)-1, 2):
@@ -52,69 +53,72 @@ for file_name in files:
             book_idxs = [int(x) for x in content[i+1].split(' ')]
             libraries[lib_i] = book_idxs
 
-            libs["ID_lib"].append(lib_i)
-            libs["num_books"].append(N)
-            libs["signup_days"].append(T)
-            libs["books_per_day"].append(M)
-
             for bid in book_idxs:
-                libs_books["ID_lib"].append(lib_i)
-                libs_books["ID_book"].append(bid)
+                total_dataset["ID_lib"].append(int(lib_i))
+                total_dataset["num_books"].append(int(N))
+                total_dataset["signup_days"].append(int(T))
+                total_dataset["books_per_day"].append(int(M))
+                total_dataset["ID_book"].append(int(bid))
+                total_dataset['score'].append(int(d[bid]))
+                total_dataset['book_done'].append(0)
 
             lib_i += 1
 
-        library_dataframe = pd.DataFrame(data= libs)
-        libs_books_dataframe = pd.DataFrame(data = libs_books)
+        #library_dataframe = pd.DataFrame()
+        libs_books_dataframe = pd.DataFrame()
 
-        pass
-        # for line in my_file
+        pd_total_dataset = pd.DataFrame(data = total_dataset)
+        #pd_total_dataset['score'] = pd.to_numeric(pd_total_dataset['score'])
 
-        tots =[]
+    #calcolo score totale potenziale di ogni libreria
+    library_score = {
+        "ID_lib" : [],
+        "total_score" : [],
+        "lib_score" : [],
+    }
 
-        for index, row in library_dataframe.iterrows():
-            df1 = libs_books_dataframe[libs_books_dataframe["ID_lib"] == row["ID_lib"]]
-            tot = 0
-            for index, row in df1.iterrows():
-                tot += int(scores[row["ID_book"]])
-            tots.append(tot)
-            
-    all_t = []
-    for i in np.arange(0,len (tots)):
-        df1 = library_dataframe[library_dataframe["ID_lib"] == i]
-        t = float(tots[i] / (df1['signup_days'] + (df1['num_books'] / df1['books_per_day'])))
-        all_t.append(t)
+    for idlib in pd_total_dataset.ID_lib.unique():
+        tot = pd_total_dataset[pd_total_dataset["ID_lib"] == idlib].score.sum()
+        one_record = pd_total_dataset[pd_total_dataset["ID_lib"] == idlib].head(1)
+        lib_S = float(tot / (one_record['signup_days'].item() + (one_record['num_books'].item() / one_record['books_per_day'].item())))
+        library_score["ID_lib"].append(idlib)
+        library_score["total_score"].append(tot)
+        library_score["lib_score"].append(lib_S)
+    
 
-    library_dataframe['lib_score'] = all_t
+    library_dataframe = pd.DataFrame(data = library_score)
     sorted_lib = library_dataframe.sort_values(by=["lib_score"], ascending=False)
 
     output = []
     count = 0
     r_days = D
     for index, row in sorted_lib.iterrows():
-        if r_days > row['signup_days']:
+        one_record = pd_total_dataset[pd_total_dataset["ID_lib"] == row['ID_lib']].head(1)
+
+        if r_days > one_record['signup_days'].item():
             d = {
                 'line1': [],
                 'line2': []
             }
-            d['line1'].append(row['ID_lib'])
-            r_days = r_days - row['signup_days']
-            numlib = r_days * row['books_per_day']
+            d['line1'].append(one_record['ID_lib'].item())
+            r_days = r_days - one_record['signup_days'].item()
+            numlib = r_days * one_record['books_per_day'].item()
             n = 0
-            if row['num_books'] < numlib:
-                d['line1'].append(row['num_books'])
-                n = row['num_books']
+            if one_record['num_books'].item() < numlib:
+                d['line1'].append(one_record['num_books'].item())
+                n = one_record['num_books'].item()
             else:
                 d['line1'].append(numlib)
                 n = numlib
-            df1 = libs_books_dataframe[libs_books_dataframe["ID_lib"] == row['ID_lib']]
-            df2 = pd.merge(df1, books_dataframe, on = "ID_book")
-            df2_sorted = df2.sort_values(by=["score"], ascending=False)
+
+            df1 = pd_total_dataset[pd_total_dataset["ID_lib"] == one_record['ID_lib'].item()]
+            df2_sorted = df1.sort_values(by=["score"], ascending=False)
             first_n_books = df2_sorted[:int(n)]['ID_book']
             d['line2'] = list(first_n_books)
             output.append(d)
             count += 1
 
-    with open("result"+input_file+".txt", 'w+') as my_file:
+    with open("result/result"+input_file, 'w+') as my_file:
         my_file.write(str(count) + "\n")
         for o in output:
             for item in o['line1']:
